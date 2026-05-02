@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Time Dilation — The Light Clock</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1 { font-size: 1.6rem; }
+  canvas { border: 1px solid #ccc; display: block; margin: 0.5rem auto; background: #fff; max-width: 100%; }
+  .controls { background: #f4f4f4; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
+  .controls label { display: inline-block; width: 130px; }
+  .frame-label { font-weight: bold; font-size: 1.05rem; margin: 1rem 0 0.25rem; }
+  .explanation { background: #fffbe6; padding: 1rem 1.2rem; border-radius: 8px; border-left: 4px solid #facc15; line-height: 1.5; }
+  code { background: #eee; padding: 0 4px; border-radius: 3px; font-family: 'SF Mono', Menlo, monospace; }
+  button { padding: 0.4rem 1rem; margin-right: 0.5rem; border: 1px solid #888; border-radius: 4px; background: #fff; cursor: pointer; }
+  button:hover { background: #eef; }
+</style>
+</head>
+<body>
+<h1>Time Dilation — The Light Clock</h1>
+
+<div class="explanation">
+<p>A <strong>light clock</strong> is a pair of mirrors a distance L apart with a photon bouncing between them. One "tick" = one round trip.</p>
+<ul>
+  <li><strong>In its rest frame</strong> (top): the photon goes straight up and back. Round trip time: <code>τ = 2L/c</code>.</li>
+  <li><strong>In a frame where the clock moves at v</strong> (bottom): the photon traces a longer zigzag path of length <code>2 √(L² + (vT/2)²)</code>. Since light still travels at c, the round-trip time T satisfies <code>cT = 2 √(L² + (vT/2)²)</code>, giving <code>T = γ τ</code> where <code>γ = 1/√(1 − v²/c²)</code>.</li>
+</ul>
+<p>Result: <strong>moving clocks run slow by a factor γ.</strong> This is not an illusion or a defect of the clock — it is the geometry of spacetime. Any other clock (mechanical, atomic, biological) shows the same dilation.</p>
+</div>
+
+<div class="controls">
+  <label for="velocity">v / c:</label>
+  <input type="range" id="velocity" min="0" max="0.95" step="0.05" value="0.6">
+  <span id="velocity-value">0.60</span>
+  <span style="margin-left: 2em;">γ = <span id="gamma-value">1.250</span></span>
+  <br><br>
+  <button id="play">▶ Play</button>
+  <button id="pause">⏸ Pause</button>
+  <button id="reset">⟲ Reset</button>
+</div>
+
+<div class="frame-label">Clock rest frame: photon goes straight up and back. One tick = 2L/c.</div>
+<canvas id="canvas-rest" width="900" height="240"></canvas>
+
+<div class="frame-label">Lab frame (clock moves to the right at v): photon traces a longer zigzag, so the tick takes longer (γ times).</div>
+<canvas id="canvas-lab" width="900" height="240"></canvas>
+
+<div id="info" style="background: #e6f4ff; padding: 1rem 1.2rem; border-radius: 8px; border-left: 4px solid #1677ff; line-height: 1.5;">
+  <strong>Tick count after the same elapsed lab time:</strong>
+  <div id="tick-count" style="margin-top: 0.5rem;"></div>
+</div>
+
+<script>
+const canvasRest = document.getElementById('canvas-rest');
+const ctxRest = canvasRest.getContext('2d');
+const canvasLab = document.getElementById('canvas-lab');
+const ctxLab = canvasLab.getContext('2d');
+
+const c = 1, L = 1;            // c = 1, L = 1
+let v = 0.6;
+let labTime = 0;
+let playing = false;
+let lastTimestamp = null;
+
+const velocityInput = document.getElementById('velocity');
+const velocityValue = document.getElementById('velocity-value');
+const gammaValue = document.getElementById('gamma-value');
+
+velocityInput.addEventListener('input', () => {
+  v = parseFloat(velocityInput.value);
+  velocityValue.textContent = v.toFixed(2);
+  gammaValue.textContent = gamma(v).toFixed(3);
+  draw();
+});
+
+document.getElementById('play').addEventListener('click', () => { if (!playing) { playing = true; lastTimestamp = null; requestAnimationFrame(animate); }});
+document.getElementById('pause').addEventListener('click', () => { playing = false; });
+document.getElementById('reset').addEventListener('click', () => { playing = false; labTime = 0; draw(); });
+
+function gamma(vv) { return 1 / Math.sqrt(1 - vv*vv); }
+
+function animate(ts) {
+  if (!playing) return;
+  if (lastTimestamp === null) lastTimestamp = ts;
+  const dt = (ts - lastTimestamp) / 1000;
+  lastTimestamp = ts;
+  labTime += dt * 0.7;       // 1 unit per ~1.4s
+  if (labTime > 6) labTime = 0;
+  draw();
+  if (playing) requestAnimationFrame(animate);
+}
+
+function drawRestFrame() {
+  // In rest frame, proper time τ_rest = labTime / γ (the clock's own time when lab time = labTime)
+  // Photon position bounces between y = 0 and y = L with period 2L/c.
+  const W = canvasRest.width, H = canvasRest.height;
+  const cx = W / 2, ground = H - 30;
+  const pixL = 130;            // pixels per unit L
+  ctxRest.clearRect(0, 0, W, H);
+
+  // Mirrors
+  ctxRest.fillStyle = '#888';
+  ctxRest.fillRect(cx - 40, ground - pixL - 6, 80, 4);
+  ctxRest.fillRect(cx - 40, ground - 4, 80, 4);
+
+  // Photon position in rest frame
+  const tau = labTime / gamma(v);      // proper time
+  const tickPeriod = 2 * L / c;
+  const tauMod = tau % tickPeriod;
+  let yPhoton;
+  if (tauMod < tickPeriod / 2) {
+    yPhoton = (tauMod / (tickPeriod/2)) * L;     // going up
+  } else {
+    yPhoton = L - ((tauMod - tickPeriod/2) / (tickPeriod/2)) * L;     // going down
+  }
+  ctxRest.fillStyle = '#ff8800';
+  ctxRest.beginPath();
+  ctxRest.arc(cx, ground - yPhoton * pixL, 6, 0, 2*Math.PI);
+  ctxRest.fill();
+
+  // Tick count
+  const ticks = Math.floor(tau / tickPeriod);
+  ctxRest.fillStyle = '#111';
+  ctxRest.font = 'bold 14px sans-serif';
+  ctxRest.fillText(`Proper time τ = ${tau.toFixed(3)} (units L/c)`, 12, 22);
+  ctxRest.fillText(`Ticks: ${ticks}`, 12, 42);
+}
+
+function drawLabFrame() {
+  const W = canvasLab.width, H = canvasLab.height;
+  const ground = H - 30;
+  const pixL = 130;
+  ctxLab.clearRect(0, 0, W, H);
+
+  // Clock position in lab frame: x = v · labTime
+  const xClock = (W * 0.15) + v * labTime * pixL;
+  // Wrap: if it goes off-screen, reset
+  const xClockWrapped = xClock % (W + 200);
+
+  // Mirrors
+  ctxLab.fillStyle = '#888';
+  ctxLab.fillRect(xClockWrapped - 40, ground - pixL - 6, 80, 4);
+  ctxLab.fillRect(xClockWrapped - 40, ground - 4, 80, 4);
+
+  // Photon position in lab frame:
+  //   horizontally moves with the clock (the photon must stay aligned with the moving mirror)
+  //   vertically bounces with period T = γ · 2L/c
+  const T = gamma(v) * 2 * L / c;
+  const tMod = labTime % T;
+  let yPhoton;
+  if (tMod < T/2) {
+    yPhoton = (tMod / (T/2)) * L;
+  } else {
+    yPhoton = L - ((tMod - T/2) / (T/2)) * L;
+  }
+  // Photon's x is moving with the clock: x = v · labTime starting from initial x of clock
+  const xPhoton = xClockWrapped;
+  ctxLab.fillStyle = '#ff8800';
+  ctxLab.beginPath();
+  ctxLab.arc(xPhoton, ground - yPhoton * pixL, 6, 0, 2*Math.PI);
+  ctxLab.fill();
+
+  // Trail of photon path (zigzag) — show last few ticks
+  ctxLab.strokeStyle = 'rgba(255,136,0,0.3)';
+  ctxLab.lineWidth = 1.3;
+  ctxLab.beginPath();
+  let firstSegment = true;
+  for (let lt = 0; lt <= labTime; lt += 0.02) {
+    const xc = (W * 0.15) + v * lt * pixL;
+    const xcw = xc % (W + 200);
+    const tm = lt % T;
+    const yp = tm < T/2 ? (tm / (T/2)) * L : L - ((tm - T/2)/(T/2)) * L;
+    const px = xcw;
+    const py = ground - yp * pixL;
+    if (firstSegment) { ctxLab.moveTo(px, py); firstSegment = false; }
+    else ctxLab.lineTo(px, py);
+  }
+  ctxLab.stroke();
+
+  // Tick count
+  const ticks = Math.floor(labTime / T);
+  ctxLab.fillStyle = '#111';
+  ctxLab.font = 'bold 14px sans-serif';
+  ctxLab.fillText(`Lab time t = ${labTime.toFixed(3)} (units L/c)`, 12, 22);
+  ctxLab.fillText(`Ticks: ${ticks}     (one tick = γ · 2L/c = ${T.toFixed(3)} L/c)`, 12, 42);
+}
+
+function draw() {
+  drawRestFrame();
+  drawLabFrame();
+
+  // Info comparing tick counts
+  const tau = labTime / gamma(v);
+  const ticksRest = Math.floor(tau / (2*L/c));
+  const ticksLab = Math.floor(labTime / (gamma(v)*2*L/c));
+  document.getElementById('tick-count').innerHTML =
+    `After lab time t = ${labTime.toFixed(2)} L/c, the moving clock shows τ = t/γ = ${tau.toFixed(2)} L/c.<br>` +
+    `Ticks visible to clock-rider (proper-time ticks): <strong>${ticksRest}</strong>. ` +
+    `Ticks visible to lab observer: <strong>${ticksLab}</strong>. They agree on the count of completed round trips — but the moving clock has aged less.`;
+}
+
+draw();
+</script>
+
+<p style="margin-top: 2rem; font-size: 0.85rem; color: #666;">
+Part of the <strong>Special Relativity &amp; Lorentz Transformations</strong> course on openphysica.org.
+Source: <a href="https://github.com/yuliyanlyubenov/lorentz_transformations/tree/main/simulations/lorentz-transformations">simulations/lorentz-transformations</a>.
+Math derivation: see Day 3 — Time Dilation.
+</p>
+
+</body>
+</html>

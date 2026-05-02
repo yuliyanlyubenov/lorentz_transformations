@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Two Light Flashes — Relativity of Simultaneity</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1 { font-size: 1.6rem; }
+  canvas { border: 1px solid #ccc; display: block; margin: 0.5rem auto; background: #fff; max-width: 100%; }
+  .controls { background: #f4f4f4; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
+  .controls label { display: inline-block; width: 130px; }
+  .frame-label { font-weight: bold; font-size: 1.05rem; margin: 1rem 0 0.25rem; }
+  .explanation { background: #fffbe6; padding: 1rem 1.2rem; border-radius: 8px; border-left: 4px solid #facc15; line-height: 1.5; }
+  .key-result { background: #e6f4ff; padding: 1rem 1.2rem; border-radius: 8px; border-left: 4px solid #1677ff; line-height: 1.5; margin-top: 1rem; }
+  button { padding: 0.4rem 1rem; margin-right: 0.5rem; border: 1px solid #888; border-radius: 4px; background: #fff; cursor: pointer; }
+  button:hover { background: #eef; }
+  code { background: #eee; padding: 0 4px; border-radius: 3px; font-family: 'SF Mono', Menlo, monospace; }
+</style>
+</head>
+<body>
+<h1>Two Light Flashes from a Moving Source</h1>
+
+<div class="explanation">
+<p>A spacecraft moves to the right at velocity <code>v</code> relative to the ground. At time t&prime; = 0 in the spacecraft frame, an observer at the centre of the ship flashes light <em>simultaneously</em> in both directions. Detectors are placed at equal distances on each end of the ship.</p>
+<p><strong>Question:</strong> Does the light reach both detectors at the same time?</p>
+<p><strong>Answer depends on the frame:</strong></p>
+<ul>
+  <li><strong>Spacecraft frame</strong> (top): both detectors are stationary, equidistant. Light travels at c in both directions. Both detectors fire <em>simultaneously</em> at t&prime; = L/c.</li>
+  <li><strong>Ground frame</strong> (bottom): both detectors move to the right with the ship. Light still travels at c in both directions (Einstein&rsquo;s 2nd postulate). But the back detector moves <em>toward</em> the back-going photon, while the front detector moves <em>away</em> from the front-going photon. The back detector fires <em>before</em> the front detector.</li>
+</ul>
+<p>This is the <strong>relativity of simultaneity</strong>: events simultaneous in one inertial frame are not simultaneous in another moving relative to it. The <em>same physical events</em> have different time-orderings in different frames.</p>
+</div>
+
+<div class="controls">
+  <label for="velocity">Velocity v/c:</label>
+  <input type="range" id="velocity" min="0" max="0.95" step="0.05" value="0.6">
+  <span id="velocity-value">0.60</span>
+  <br>
+  <label for="progress">Animation:</label>
+  <input type="range" id="progress" min="0" max="1" step="0.01" value="0">
+  <span id="progress-value">0%</span>
+  <br><br>
+  <button id="play">▶ Play</button>
+  <button id="pause">⏸ Pause</button>
+  <button id="reset">⟲ Reset</button>
+</div>
+
+<div class="frame-label">Spacecraft frame S&prime; (ship is stationary)</div>
+<canvas id="canvas-ship" width="900" height="170"></canvas>
+
+<div class="frame-label">Ground frame S (ship moves to the right at v)</div>
+<canvas id="canvas-ground" width="900" height="170"></canvas>
+
+<div class="key-result" id="key-result">
+<strong>Key formulas:</strong>
+<ul>
+<li>Ship-frame strike time (both detectors): <code>t&prime; = L/c</code> &nbsp;(simultaneous)</li>
+<li>Ground-frame back-detector strike: <code>t<sub>back</sub> = L / (γ (c + v))</code></li>
+<li>Ground-frame front-detector strike: <code>t<sub>front</sub> = L / (γ (c − v))</code></li>
+<li>Asymmetry: <code>Δt = t<sub>front</sub> − t<sub>back</sub> = 2 L v γ / c²</code></li>
+</ul>
+<p>Both photons in the ground frame still travel at c (you can check: each photon position in the ground frame is just <code>±c·t</code>). What differs between frames is <em>when</em> the moving detectors meet the photons.</p>
+</div>
+
+<script>
+const c = 1;       // speed of light, units c = 1
+const L = 0.5;     // ship half-length in its rest frame
+
+let v = 0.6;
+let progress = 0;
+let playing = false;
+let lastTimestamp = null;
+
+const canvasShip = document.getElementById('canvas-ship');
+const ctxShip = canvasShip.getContext('2d');
+const canvasGround = document.getElementById('canvas-ground');
+const ctxGround = canvasGround.getContext('2d');
+
+const velocityInput = document.getElementById('velocity');
+const velocityValue = document.getElementById('velocity-value');
+const progressInput = document.getElementById('progress');
+const progressValue = document.getElementById('progress-value');
+
+function gamma(vv) { return 1 / Math.sqrt(1 - vv*vv); }
+function tShipFinal() { return L / c; }                           // both photons strike
+function tGroundFinal() { return L / (gamma(v) * (c - v)); }      // forward photon strikes (later)
+function tGroundBack() { return L / (gamma(v) * (c + v)); }       // backward photon strikes (sooner)
+
+function setVelocity(newV) {
+  v = Math.max(0, Math.min(0.95, newV));
+  velocityValue.textContent = v.toFixed(2);
+  draw();
+}
+function setProgress(p) {
+  progress = Math.max(0, Math.min(1, p));
+  progressInput.value = progress;
+  progressValue.textContent = (progress * 100).toFixed(0) + '%';
+  draw();
+}
+
+velocityInput.addEventListener('input', () => setVelocity(parseFloat(velocityInput.value)));
+progressInput.addEventListener('input', () => setProgress(parseFloat(progressInput.value)));
+document.getElementById('play').addEventListener('click', () => { if (!playing) { playing = true; lastTimestamp = null; requestAnimationFrame(animate); }});
+document.getElementById('pause').addEventListener('click', () => { playing = false; });
+document.getElementById('reset').addEventListener('click', () => { playing = false; setProgress(0); });
+
+function animate(ts) {
+  if (!playing) return;
+  if (lastTimestamp === null) lastTimestamp = ts;
+  const dt = (ts - lastTimestamp) / 1000;
+  lastTimestamp = ts;
+  let p = progress + dt * 0.4;   // 2.5s per full pass
+  if (p >= 1) { p = 1; playing = false; }
+  setProgress(p);
+  if (playing) requestAnimationFrame(animate);
+}
+
+function drawScene(ctx, title, opts) {
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  // Title
+  ctx.fillStyle = '#111';
+  ctx.font = 'bold 13px sans-serif';
+  ctx.fillText(title, 10, 18);
+  ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#444';
+  ctx.fillText(opts.statusLine, 10, 36);
+  if (opts.statusLine2) ctx.fillText(opts.statusLine2, 10, 52);
+
+  // Ground line
+  ctx.strokeStyle = '#888';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, 130);
+  ctx.lineTo(W, 130);
+  ctx.stroke();
+
+  // Tick marks (spatial scale)
+  const cx = opts.cx;
+  const sc = opts.scale;
+  ctx.strokeStyle = '#ccc';
+  ctx.fillStyle = '#999';
+  ctx.font = '10px sans-serif';
+  for (let i = -5; i <= 5; i++) {
+    const x = cx + i * sc;
+    if (x < 0 || x > W) continue;
+    ctx.beginPath();
+    ctx.moveTo(x, 125);
+    ctx.lineTo(x, 135);
+    ctx.stroke();
+    ctx.fillText(i.toString(), x - 4, 148);
+  }
+
+  // Ship
+  const shipColor = '#cce5ff';
+  const shipBorder = '#1677ff';
+  ctx.fillStyle = shipColor;
+  ctx.strokeStyle = shipBorder;
+  ctx.lineWidth = 2;
+  ctx.fillRect(opts.shipBack, 70, opts.shipFront - opts.shipBack, 50);
+  ctx.strokeRect(opts.shipBack, 70, opts.shipFront - opts.shipBack, 50);
+
+  // Center observer (blue dot)
+  ctx.fillStyle = '#0050b3';
+  ctx.beginPath();
+  ctx.arc(opts.shipCenter, 95, 5, 0, 2*Math.PI);
+  ctx.fill();
+
+  // Detectors (red rectangles at the ends)
+  ctx.fillStyle = opts.backHit ? '#cc0000' : '#999';
+  ctx.fillRect(opts.shipBack - 4, 82, 8, 26);
+  ctx.fillStyle = opts.frontHit ? '#cc0000' : '#999';
+  ctx.fillRect(opts.shipFront - 4, 82, 8, 26);
+
+  // Photons (orange dots)
+  ctx.fillStyle = '#ff8800';
+  for (const photon of opts.photons) {
+    if (photon.x < 0 || photon.x > W) continue;
+    ctx.beginPath();
+    ctx.arc(photon.x, 95, 4.5, 0, 2*Math.PI);
+    ctx.fill();
+  }
+}
+
+function drawShipFrame() {
+  const t = progress * tShipFinal();
+  const W = canvasShip.width;
+  const cx = W / 2;
+  const sc = 130;       // pixels per unit
+  const shipBack  = cx - L * sc;
+  const shipFront = cx + L * sc;
+  const photons = [];
+  if (progress > 0 && t <= L/c + 0.001) {
+    photons.push({ x: cx + c*t * sc });
+    photons.push({ x: cx - c*t * sc });
+  }
+  const status = `t' = ${t.toFixed(3)} (in units L/c)   |   ship is stationary, photons travel at ±c`;
+  let status2 = '';
+  if (progress >= 1) status2 = 'Both detectors fire SIMULTANEOUSLY at t\' = L/c.';
+  drawScene(ctxShip, "Ship frame S' — observer rides with the ship", {
+    cx, scale: sc,
+    shipBack, shipFront, shipCenter: cx,
+    backHit: progress >= 1,
+    frontHit: progress >= 1,
+    photons,
+    statusLine: status,
+    statusLine2: status2,
+  });
+}
+
+function drawGroundFrame() {
+  const t = progress * tGroundFinal();
+  const W = canvasGround.width;
+  const cx = W / 4;            // origin closer to left so we can watch ship move right
+  const sc = 130;
+  const tBack  = tGroundBack();
+  const tFront = tGroundFinal();
+
+  // Ship in ground frame: moves right at v, length contracted by 1/γ
+  const Lg = L / gamma(v);
+  const shipCenterX = cx + v*t * sc;
+  const shipBack  = shipCenterX - Lg * sc;
+  const shipFront = shipCenterX + Lg * sc;
+
+  // Photons: emitted from ground origin (cx) at t=0, travel at c
+  // Hide each photon once it has been absorbed by its detector
+  const photons = [];
+  if (progress > 0 && t > 0) {
+    const xForward  = cx + c*t * sc;
+    const xBackward = cx - c*t * sc;
+    if (t <= tFront + 1e-6) photons.push({ x: xForward });
+    if (t <= tBack + 1e-6)  photons.push({ x: xBackward });
+  }
+
+  let status = `t = ${t.toFixed(3)} (units L/c), v = ${v.toFixed(2)}c, γ = ${gamma(v).toFixed(3)}, contracted half-length = ${Lg.toFixed(3)}`;
+  let status2 = '';
+  if (t >= tBack && t < tFront) status2 = `Back detector fired at t = ${tBack.toFixed(3)}. Waiting for front...`;
+  if (t >= tFront) {
+    const dt = tFront - tBack;
+    status2 = `Both detectors fired. Δt = ${dt.toFixed(3)} L/c — back detector fires FIRST.`;
+  }
+
+  drawScene(ctxGround, "Ground frame S — ship moves to the right at v", {
+    cx, scale: sc,
+    shipBack, shipFront, shipCenter: shipCenterX,
+    backHit: t >= tBack,
+    frontHit: t >= tFront,
+    photons,
+    statusLine: status,
+    statusLine2: status2,
+  });
+
+  // Light cone hint: draw light worldlines as dashed grey
+  ctxGround.strokeStyle = 'rgba(255,136,0,0.25)';
+  ctxGround.setLineDash([4, 3]);
+  ctxGround.lineWidth = 1;
+  ctxGround.beginPath();
+  ctxGround.moveTo(cx, 95);
+  ctxGround.lineTo(cx + tFront * c * sc, 95);
+  ctxGround.stroke();
+  ctxGround.beginPath();
+  ctxGround.moveTo(cx, 95);
+  ctxGround.lineTo(cx - tFront * c * sc, 95);
+  ctxGround.stroke();
+  ctxGround.setLineDash([]);
+}
+
+function draw() {
+  drawShipFrame();
+  drawGroundFrame();
+}
+
+setProgress(0);
+draw();
+</script>
+
+<p style="margin-top: 2rem; font-size: 0.85rem; color: #666;">
+Part of the <strong>Special Relativity &amp; Lorentz Transformations</strong> course on openphysica.org.
+Source: <a href="https://github.com/yuliyanlyubenov/lorentz_transformations/tree/main/simulations/lorentz-transformations">simulations/lorentz-transformations</a>.
+Math derivation: see Day 5 — Relativity of Simultaneity.
+</p>
+
+</body>
+</html>

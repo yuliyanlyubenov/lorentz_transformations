@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Relativistic Velocity Addition</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1 { font-size: 1.6rem; }
+  canvas { border: 1px solid #ccc; display: block; margin: 0.5rem auto; background: #fff; max-width: 100%; }
+  .controls { background: #f4f4f4; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
+  .controls label { display: inline-block; width: 200px; }
+  .explanation { background: #fffbe6; padding: 1rem 1.2rem; border-radius: 8px; border-left: 4px solid #facc15; line-height: 1.5; }
+  code { background: #eee; padding: 0 4px; border-radius: 3px; font-family: 'SF Mono', Menlo, monospace; }
+  .result { background: #e6f4ff; padding: 1rem 1.2rem; border-radius: 8px; border-left: 4px solid #1677ff; line-height: 1.6; }
+</style>
+</head>
+<body>
+<h1>Relativistic Velocity Addition</h1>
+
+<div class="explanation">
+<p>In Galilean physics, if you throw a ball at speed <code>u&prime;</code> from a train moving at speed <code>v</code>, the ball&rsquo;s speed in the ground frame is simply <code>u = u&prime; + v</code>. With Lorentz transformations, this fails. The correct law is</p>
+<p style="text-align: center; font-size: 1.15rem;"><code>u = (u&prime; + v) / (1 + u&prime; v / c²)</code></p>
+<p>The denominator caps the result at c: even if you flash light (<code>u&prime; = c</code>) from a train moving at <code>v</code>, the light still travels at c in the ground frame.</p>
+</div>
+
+<div class="controls">
+  <label for="vTrain">Train speed v / c:</label>
+  <input type="range" id="vTrain" min="-0.95" max="0.95" step="0.01" value="0.5">
+  <span id="vTrain-value">+0.50</span>
+  <br>
+  <label for="vBall">Ball speed u&prime; / c (in train):</label>
+  <input type="range" id="vBall" min="-1" max="1" step="0.01" value="0.6">
+  <span id="vBall-value">+0.60</span>
+</div>
+
+<div class="result" id="result"></div>
+
+<canvas id="canvas" width="900" height="380"></canvas>
+
+<p style="font-size: 0.9rem;">The plot shows <code>u(u&prime;)</code> at the chosen <code>v</code>. The dashed grey line is the Galilean prediction <code>u = u&prime; + v</code>. The blue curve is the relativistic prediction. Notice how the relativistic curve stays bounded between &minus;c and +c no matter what.</p>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const vTrainInput = document.getElementById('vTrain');
+const vBallInput = document.getElementById('vBall');
+const vTrainValue = document.getElementById('vTrain-value');
+const vBallValue = document.getElementById('vBall-value');
+const result = document.getElementById('result');
+
+let vTrain = 0.5;
+let vBall  = 0.6;
+
+vTrainInput.addEventListener('input', () => { vTrain = parseFloat(vTrainInput.value); update(); });
+vBallInput.addEventListener('input',  () => { vBall  = parseFloat(vBallInput.value);  update(); });
+
+function relAdd(uPrime, v) { return (uPrime + v) / (1 + uPrime * v); }
+
+function update() {
+  vTrainValue.textContent = (vTrain >= 0 ? '+' : '') + vTrain.toFixed(2);
+  vBallValue.textContent  = (vBall  >= 0 ? '+' : '') + vBall.toFixed(2);
+  const uGalilean = vBall + vTrain;
+  const uRelativistic = relAdd(vBall, vTrain);
+  let extra = '';
+  if (Math.abs(Math.abs(vBall) - 1) < 1e-6) {
+    extra = `<br><strong>Note:</strong> u&prime; = ±c (light flashed from the train). Relativistically, u = ±c regardless of v — the speed of light is invariant.`;
+  }
+  result.innerHTML = `
+    <strong>Train speed:</strong> v = ${vTrain.toFixed(2)} c<br>
+    <strong>Ball speed in train:</strong> u&prime; = ${vBall.toFixed(2)} c<br>
+    <strong>Galilean prediction:</strong> u<sub>G</sub> = u&prime; + v = ${uGalilean.toFixed(3)} c
+    ${Math.abs(uGalilean) > 1 ? '&nbsp;&nbsp;⚠ exceeds c — Galilean is wrong' : ''}<br>
+    <strong>Relativistic answer:</strong> u = (u&prime; + v) / (1 + u&prime;v/c²) = ${uRelativistic.toFixed(3)} c
+    ${extra}
+  `;
+  draw();
+}
+
+function draw() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  const pad = { l: 60, r: 30, t: 30, b: 50 };
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+  const xMin = -1.5, xMax = 1.5, yMin = -2, yMax = 2;
+  const px = u => pad.l + ((u - xMin)/(xMax - xMin)) * pw;
+  const py = u => pad.t + ph - ((u - yMin)/(yMax - yMin)) * ph;
+
+  // Grid
+  ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+  for (let x = -1; x <= 1.5; x += 0.5) { ctx.beginPath(); ctx.moveTo(px(x), pad.t); ctx.lineTo(px(x), pad.t + ph); ctx.stroke(); }
+  for (let y = -2; y <= 2; y += 0.5) { ctx.beginPath(); ctx.moveTo(pad.l, py(y)); ctx.lineTo(pad.l + pw, py(y)); ctx.stroke(); }
+
+  // Forbidden bands
+  ctx.fillStyle = 'rgba(255,200,200,0.35)';
+  ctx.fillRect(pad.l, py(2), pw, py(1) - py(2));
+  ctx.fillRect(pad.l, py(-1), pw, py(-2) - py(-1));
+  ctx.fillStyle = '#a02';
+  ctx.font = '11px sans-serif';
+  ctx.fillText('|u| > c — forbidden', pad.l + 10, py(1.7));
+
+  // Axes
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, py(0)); ctx.lineTo(pad.l + pw, py(0));
+  ctx.moveTo(px(0), pad.t); ctx.lineTo(px(0), pad.t + ph);
+  ctx.stroke();
+
+  ctx.fillStyle = '#333';
+  ctx.font = '12px sans-serif';
+  for (let x = -1; x <= 1.5; x += 0.5) ctx.fillText(x.toFixed(1), px(x) - 8, py(0) + 14);
+  for (let y = -2; y <= 2; y += 0.5) { if (y === 0) continue; ctx.fillText(y.toFixed(1), pad.l - 26, py(y) + 4); }
+  ctx.font = 'bold 12px sans-serif';
+  ctx.fillText("u' / c", pad.l + pw - 30, py(0) + 30);
+  ctx.fillText("u / c",  pad.l - 50, pad.t - 5);
+
+  // c-limit lines
+  ctx.strokeStyle = '#888'; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(pad.l, py(1));  ctx.lineTo(pad.l + pw, py(1));  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(pad.l, py(-1)); ctx.lineTo(pad.l + pw, py(-1)); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#666';
+  ctx.fillText('u = c',  pad.l + pw - 50, py(1)  - 4);
+  ctx.fillText('u = -c', pad.l + pw - 56, py(-1) + 14);
+
+  // Galilean line
+  ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5; ctx.setLineDash([6,4]);
+  ctx.beginPath();
+  for (let i = 0; i <= 100; i++) {
+    const up = xMin + (xMax - xMin) * i / 100;
+    const u = up + vTrain;
+    if (i === 0) ctx.moveTo(px(up), py(u)); else ctx.lineTo(px(up), py(u));
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Relativistic curve
+  ctx.strokeStyle = '#1677ff'; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  for (let i = 0; i <= 200; i++) {
+    const up = -1 + 2 * i / 200;
+    const u = relAdd(up, vTrain);
+    if (i === 0) ctx.moveTo(px(up), py(u)); else ctx.lineTo(px(up), py(u));
+  }
+  ctx.stroke();
+
+  // Marker for current point
+  const u0 = relAdd(vBall, vTrain);
+  ctx.fillStyle = '#cf1322';
+  ctx.beginPath(); ctx.arc(px(vBall), py(u0), 6, 0, 2*Math.PI); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+
+  // Galilean point
+  ctx.fillStyle = '#999';
+  ctx.beginPath(); ctx.arc(px(vBall), py(vBall + vTrain), 5, 0, 2*Math.PI); ctx.fill();
+
+  // Legend
+  ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#1677ff';
+  ctx.fillText("— relativistic: u = (u'+v)/(1+u'v/c²)", pad.l + 10, pad.t + 14);
+  ctx.fillStyle = '#999';
+  ctx.fillText("-- Galilean: u = u'+v", pad.l + 10, pad.t + 30);
+}
+
+update();
+</script>
+
+<p style="margin-top: 2rem; font-size: 0.85rem; color: #666;">
+Part of the <strong>Special Relativity &amp; Lorentz Transformations</strong> course on openphysica.org.
+Source: <a href="https://github.com/yuliyanlyubenov/lorentz_transformations/tree/main/simulations/lorentz-transformations">simulations/lorentz-transformations</a>.
+Math derivation: see Day 5 — Velocity Addition.
+</p>
+
+</body>
+</html>

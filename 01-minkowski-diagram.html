@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Minkowski Spacetime Diagram</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1 { font-size: 1.6rem; }
+  canvas { border: 1px solid #ccc; display: block; margin: 0.5rem auto; background: #fff; max-width: 100%; }
+  .controls { background: #f4f4f4; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
+  .controls label { display: inline-block; width: 130px; }
+  .explanation { background: #fffbe6; padding: 1rem 1.2rem; border-radius: 8px; border-left: 4px solid #facc15; line-height: 1.5; }
+  code { background: #eee; padding: 0 4px; border-radius: 3px; font-family: 'SF Mono', Menlo, monospace; }
+  .legend { display: flex; flex-wrap: wrap; gap: 1.5rem; font-size: 0.9rem; margin: 0.5rem 0; }
+  .legend span::before { content: ''; display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 0.4rem; }
+  .lg-x::before  { background: #1677ff; }
+  .lg-t::before  { background: #722ed1; }
+  .lg-xp::before { background: #fa8c16; }
+  .lg-tp::before { background: #cf1322; }
+  .lg-light::before { background: #d4d4d4; }
+</style>
+</head>
+<body>
+<h1>Minkowski Spacetime Diagram — Two Frames</h1>
+
+<div class="explanation">
+<p>This is a <strong>Minkowski (spacetime) diagram</strong>: time runs vertically, space runs horizontally, both in units where c = 1 so that light rays make 45° angles. Two reference frames are overlaid:</p>
+<ul>
+  <li><strong>Frame S</strong> (rest frame): orthogonal axes <span class="lg-x">x</span> and <span class="lg-t">ct</span>.</li>
+  <li><strong>Frame S&prime;</strong> (moving at velocity v relative to S): tilted axes <span class="lg-xp">x&prime;</span> and <span class="lg-tp">ct&prime;</span>. The <code>ct&prime;</code> axis is the worldline of the S&prime; observer (slope = c/v); the <code>x&prime;</code> axis is the line of "S&prime;-simultaneity" (slope = v/c).</li>
+  <li><strong>Light cone</strong>: <span class="lg-light">grey diagonals</span> at ±45°, marking the trajectories of light. These are the <em>same</em> in every frame (Einstein&rsquo;s 2nd postulate).</li>
+</ul>
+<p>Click anywhere in the diagram to place an event; the simulation reports its (t, x) coordinates in S and (t&prime;, x&prime;) coordinates in S&prime;, computed via the Lorentz transformation.</p>
+</div>
+
+<div class="controls">
+  <label for="velocity">v / c:</label>
+  <input type="range" id="velocity" min="-0.95" max="0.95" step="0.05" value="0.5">
+  <span id="velocity-value">+0.50</span>
+</div>
+
+<div class="legend">
+  <span class="lg-x">S: x axis</span>
+  <span class="lg-t">S: ct axis</span>
+  <span class="lg-xp">S&prime;: x&prime; axis (line of S&prime;-simultaneity)</span>
+  <span class="lg-tp">S&prime;: ct&prime; axis (S&prime; observer's worldline)</span>
+  <span class="lg-light">light cone</span>
+</div>
+
+<canvas id="canvas" width="700" height="700"></canvas>
+
+<div id="event-info" style="background: #e6f4ff; padding: 1rem 1.2rem; border-radius: 8px; border-left: 4px solid #1677ff; line-height: 1.5; min-height: 4em;">
+  <em>Click somewhere on the diagram to place an event.</em>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const cx = W / 2, cy = H / 2;
+const scale = 60;   // pixels per unit of x or ct
+
+let v = 0.5;
+let event = null;   // {t, x} in S frame
+
+const velocityInput = document.getElementById('velocity');
+const velocityValue = document.getElementById('velocity-value');
+
+velocityInput.addEventListener('input', () => {
+  v = parseFloat(velocityInput.value);
+  velocityValue.textContent = (v >= 0 ? '+' : '') + v.toFixed(2);
+  draw();
+});
+
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const px = e.clientX - rect.left;
+  const py = e.clientY - rect.top;
+  // Convert canvas pixel to (x, ct) coordinates in S
+  const x  = (px - cx) / scale;
+  const ct = (cy - py) / scale;
+  event = { x, ct };
+  draw();
+  updateEventInfo();
+});
+
+function gamma(vv) { return 1 / Math.sqrt(1 - vv*vv); }
+
+function lorentz(t, x, vv) {
+  // Forward boost: from S to S' (S' moves at +v in S)
+  const g = gamma(vv);
+  return {
+    tp: g * (t - vv * x),
+    xp: g * (x - vv * t),
+  };
+}
+
+function drawAxis(x1, y1, x2, y2, color, label, labelOffset) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  // Arrowhead
+  const ang = Math.atan2(y2 - y1, x2 - x1);
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - 10*Math.cos(ang - 0.4), y2 - 10*Math.sin(ang - 0.4));
+  ctx.lineTo(x2 - 10*Math.cos(ang + 0.4), y2 - 10*Math.sin(ang + 0.4));
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  // Label
+  ctx.fillStyle = color;
+  ctx.font = 'bold 13px sans-serif';
+  ctx.fillText(label, x2 + labelOffset.dx, y2 + labelOffset.dy);
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Light grid in S
+  ctx.strokeStyle = '#eee';
+  ctx.lineWidth = 1;
+  for (let i = -10; i <= 10; i++) {
+    if (i === 0) continue;
+    ctx.beginPath();
+    ctx.moveTo(cx + i*scale, 0); ctx.lineTo(cx + i*scale, H);
+    ctx.moveTo(0, cy - i*scale); ctx.lineTo(W, cy - i*scale);
+    ctx.stroke();
+  }
+
+  // Light cone (45 degree dashed lines)
+  ctx.strokeStyle = '#bbb';
+  ctx.setLineDash([6, 4]);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - cy, H); ctx.lineTo(cx + cy, 0);   // future-right ray (ct = x)
+  ctx.moveTo(cx + cy, H); ctx.lineTo(cx - cy, 0);   // future-left ray (ct = -x)
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#888';
+  ctx.font = '11px sans-serif';
+  ctx.fillText('light: ct = x', cx + cy - 75, 12);
+  ctx.fillText('light: ct = -x', cx - cy + 5, 12);
+
+  // S axes (orthogonal, blue/purple)
+  drawAxis(0, cy, W, cy, '#1677ff', 'x', { dx: -15, dy: 18 });
+  drawAxis(cx, H, cx, 0, '#722ed1', 'ct', { dx: 8, dy: 0 });
+
+  // S' axes: x' has slope v/c (in (x, ct) plane, x' axis is ct = v·x → for unit step in x, ct goes up v)
+  // ct' axis has slope c/v (it is the worldline of S' observer)
+  // We'll draw both axes spanning the canvas.
+  const halfSpan = 8; // half-units to draw
+
+  // x' axis: parametrize by x_param ∈ [-halfSpan, halfSpan], gives (x = x_param, ct = v * x_param)
+  const x1p = cx + (-halfSpan)*scale;
+  const y1p = cy - v*(-halfSpan)*scale;
+  const x2p = cx + halfSpan*scale;
+  const y2p = cy - v*halfSpan*scale;
+  drawAxis(x1p, y1p, x2p, y2p, '#fa8c16', "x'", { dx: 8, dy: 4 });
+
+  // ct' axis: parametrize by t_param ∈ [-halfSpan, halfSpan], gives (x = v * t_param, ct = t_param)
+  const x1t = cx + v*(-halfSpan)*scale;
+  const y1t = cy - (-halfSpan)*scale;
+  const x2t = cx + v*halfSpan*scale;
+  const y2t = cy - halfSpan*scale;
+  drawAxis(x1t, y1t, x2t, y2t, '#cf1322', "ct'", { dx: 8, dy: 0 });
+
+  // Tick marks on S axes
+  ctx.fillStyle = '#444';
+  ctx.font = '10px sans-serif';
+  for (let i = -8; i <= 8; i++) {
+    if (i === 0) continue;
+    ctx.fillText(i.toString(), cx + i*scale - 4, cy + 14);    // x ticks
+    ctx.fillText(i.toString(), cx + 6, cy - i*scale + 4);     // ct ticks
+  }
+
+  // Event marker
+  if (event) {
+    const px = cx + event.x * scale;
+    const py = cy - event.ct * scale;
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.arc(px, py, 6, 0, 2*Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // Velocity label
+  ctx.fillStyle = '#444';
+  ctx.font = '12px sans-serif';
+  ctx.fillText(`v = ${v.toFixed(2)} c     γ = ${gamma(v).toFixed(3)}`, 12, H - 8);
+}
+
+function updateEventInfo() {
+  if (!event) return;
+  const t  = event.ct;        // ct, with c=1 so this is "ct" in the same units
+  const x  = event.x;
+  const tr = lorentz(t, x, v);
+  const interval = -t*t + x*x;   // signature (-,+,+,+): ds² = -c²dt² + dx²
+  const character =
+    interval < -1e-9 ? 'timelike (ds² < 0)' :
+    interval > 1e-9  ? 'spacelike (ds² > 0)' :
+                       'null / lightlike (ds² = 0)';
+  document.getElementById('event-info').innerHTML = `
+    <strong>Event coordinates</strong><br>
+    In S:&nbsp;&nbsp;&nbsp;ct = ${t.toFixed(3)},&nbsp; x = ${x.toFixed(3)}<br>
+    In S&prime;: ct&prime; = ${tr.tp.toFixed(3)},&nbsp; x&prime; = ${tr.xp.toFixed(3)}&nbsp;
+    &nbsp;&nbsp;[via Lorentz boost at v = ${v.toFixed(2)}c]<br>
+    Spacetime interval ds² = -(ct)² + x² = ${interval.toFixed(4)} → ${character}
+  `;
+}
+
+draw();
+</script>
+
+<p style="margin-top: 2rem; font-size: 0.85rem; color: #666;">
+Part of the <strong>Special Relativity &amp; Lorentz Transformations</strong> course on openphysica.org.
+Source: <a href="https://github.com/yuliyanlyubenov/lorentz_transformations/tree/main/simulations/lorentz-transformations">simulations/lorentz-transformations</a>.
+Math derivation: see Day 2 — Deriving the Lorentz Transformation, and Day 6 — Spacetime Interval.
+</p>
+
+</body>
+</html>

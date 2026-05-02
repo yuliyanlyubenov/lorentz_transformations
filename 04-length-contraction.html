@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Length Contraction</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1 { font-size: 1.6rem; }
+  canvas { border: 1px solid #ccc; display: block; margin: 0.5rem auto; background: #fff; max-width: 100%; }
+  .controls { background: #f4f4f4; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
+  .controls label { display: inline-block; width: 130px; }
+  .explanation { background: #fffbe6; padding: 1rem 1.2rem; border-radius: 8px; border-left: 4px solid #facc15; line-height: 1.5; }
+  code { background: #eee; padding: 0 4px; border-radius: 3px; font-family: 'SF Mono', Menlo, monospace; }
+</style>
+</head>
+<body>
+<h1>Length Contraction — Moving Rulers Are Shorter</h1>
+
+<div class="explanation">
+<p>A 1-metre ruler at rest has <strong>proper length</strong> <code>L₀</code>. When that same ruler moves at velocity v relative to an observer, its length as measured by simultaneous endpoint readings in the observer&rsquo;s frame is</p>
+<p style="text-align: center; font-size: 1.15rem;"><code>L = L₀ · √(1 − v²/c²) = L₀ / γ</code></p>
+<p>This is <strong>length contraction</strong>. It is real (not an optical illusion) and follows directly from the Lorentz transformation. Drag the velocity slider to see how the moving ruler is measured shorter than its proper length.</p>
+</div>
+
+<div class="controls">
+  <label for="velocity">v / c:</label>
+  <input type="range" id="velocity" min="0" max="0.95" step="0.01" value="0.6">
+  <span id="velocity-value">0.60</span>
+  <span style="margin-left: 2em;">γ = <span id="gamma-value">1.250</span></span>
+  <span style="margin-left: 2em;">L / L₀ = <span id="contraction-value">0.800</span></span>
+</div>
+
+<canvas id="canvas" width="900" height="240"></canvas>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const velocityInput = document.getElementById('velocity');
+const velocityValue = document.getElementById('velocity-value');
+const gammaValue = document.getElementById('gamma-value');
+const contractionValue = document.getElementById('contraction-value');
+
+let v = 0.6;
+const L0 = 1;            // proper length
+const pixPerUnit = 250;
+
+function gamma(vv) { return 1 / Math.sqrt(1 - vv*vv); }
+
+velocityInput.addEventListener('input', () => {
+  v = parseFloat(velocityInput.value);
+  velocityValue.textContent = v.toFixed(2);
+  gammaValue.textContent = gamma(v).toFixed(3);
+  contractionValue.textContent = (1/gamma(v)).toFixed(3);
+  draw();
+});
+
+function drawRuler(yCenter, x, length, label, fill, border) {
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = border;
+  ctx.lineWidth = 2;
+  const w = length * pixPerUnit;
+  ctx.fillRect(x, yCenter - 18, w, 36);
+  ctx.strokeRect(x, yCenter - 18, w, 36);
+
+  // Tick marks (every 0.1 of proper length, scaled)
+  ctx.strokeStyle = border;
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 10; i++) {
+    const tx = x + (i/10) * w;
+    ctx.beginPath();
+    ctx.moveTo(tx, yCenter - 18);
+    ctx.lineTo(tx, yCenter - 12);
+    ctx.moveTo(tx, yCenter + 18);
+    ctx.lineTo(tx, yCenter + 12);
+    ctx.stroke();
+  }
+
+  // Label
+  ctx.fillStyle = '#111';
+  ctx.font = 'bold 13px sans-serif';
+  ctx.fillText(label, x, yCenter - 28);
+
+  // Length annotation
+  ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#444';
+  ctx.fillText(`measured length = ${length.toFixed(3)} L₀`, x, yCenter + 36);
+}
+
+function draw() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const startX = 60;
+  drawRuler(60, startX, L0, "Ruler at rest (proper length L₀ = 1)", "#cce5ff", "#1677ff");
+
+  const Lcontracted = L0 / gamma(v);
+  drawRuler(170, startX, Lcontracted, `Same ruler at v = ${v.toFixed(2)}c (lab measurement)`, "#fff1cc", "#fa8c16");
+
+  // Comparison line
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  ctx.setLineDash([4, 3]);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(startX + L0 * pixPerUnit, 42);
+  ctx.lineTo(startX + L0 * pixPerUnit, 200);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#888';
+  ctx.font = '11px sans-serif';
+  ctx.fillText('proper length endpoint', startX + L0 * pixPerUnit + 6, 200);
+
+  // Difference annotation
+  if (v > 0.05) {
+    const x1 = startX + Lcontracted * pixPerUnit;
+    const x2 = startX + L0 * pixPerUnit;
+    ctx.strokeStyle = '#cc0000';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x1, 220);
+    ctx.lineTo(x2, 220);
+    ctx.stroke();
+    // Arrowheads
+    ctx.beginPath();
+    ctx.moveTo(x1, 220); ctx.lineTo(x1+6, 217); ctx.lineTo(x1+6, 223); ctx.closePath();
+    ctx.fillStyle = '#cc0000'; ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x2, 220); ctx.lineTo(x2-6, 217); ctx.lineTo(x2-6, 223); ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#cc0000';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(`Δ = ${(L0 - Lcontracted).toFixed(3)} L₀ contraction`, (x1+x2)/2 - 60, 215);
+  }
+}
+
+draw();
+</script>
+
+<p style="margin-top: 2rem; font-size: 0.85rem; color: #666;">
+Part of the <strong>Special Relativity &amp; Lorentz Transformations</strong> course on openphysica.org.
+Source: <a href="https://github.com/yuliyanlyubenov/lorentz_transformations/tree/main/simulations/lorentz-transformations">simulations/lorentz-transformations</a>.
+Math derivation: see Day 4 — Length Contraction.
+</p>
+
+</body>
+</html>
