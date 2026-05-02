@@ -49,7 +49,7 @@
 <canvas id="canvas-ship" width="900" height="170"></canvas>
 
 <div class="frame-label">Ground frame S (ship moves to the right at v)</div>
-<canvas id="canvas-ground" width="900" height="170"></canvas>
+<canvas id="canvas-ground" width="900" height="200"></canvas>
 
 <div class="key-result" id="key-result">
 <strong>Key formulas:</strong>
@@ -118,7 +118,7 @@ function animate(ts) {
 function drawScene(ctx, title, opts) {
   const W = ctx.canvas.width, H = ctx.canvas.height;
   ctx.clearRect(0, 0, W, H);
-  // Title
+  // Title and status lines
   ctx.fillStyle = '#111';
   ctx.font = 'bold 13px sans-serif';
   ctx.fillText(title, 10, 18);
@@ -126,59 +126,108 @@ function drawScene(ctx, title, opts) {
   ctx.fillStyle = '#444';
   ctx.fillText(opts.statusLine, 10, 36);
   if (opts.statusLine2) ctx.fillText(opts.statusLine2, 10, 52);
+  if (opts.statusLine3) {
+    ctx.fillStyle = '#9c5d00';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(opts.statusLine3, 10, 68);
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#444';
+  }
 
-  // Ground line
+  // Ground line — vertical position depends on canvas height
+  const groundY = H - 40;
   ctx.strokeStyle = '#888';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(0, 130);
-  ctx.lineTo(W, 130);
+  ctx.moveTo(0, groundY);
+  ctx.lineTo(W, groundY);
   ctx.stroke();
 
-  // Tick marks (spatial scale)
+  // Tick marks at integer x coordinates (only those that fit in canvas)
   const cx = opts.cx;
   const sc = opts.scale;
   ctx.strokeStyle = '#ccc';
   ctx.fillStyle = '#999';
   ctx.font = '10px sans-serif';
-  for (let i = -5; i <= 5; i++) {
-    const x = cx + i * sc;
-    if (x < 0 || x > W) continue;
+  // Show ticks at sensible spacing depending on scale
+  const tickStep = sc > 200 ? 0.5 : (sc > 90 ? 1 : 2);
+  for (let i = -10; i <= 10; i += tickStep) {
+    const xPx = cx + i * sc;
+    if (xPx < 0 || xPx > W) continue;
     ctx.beginPath();
-    ctx.moveTo(x, 125);
-    ctx.lineTo(x, 135);
+    ctx.moveTo(xPx, groundY - 5);
+    ctx.lineTo(xPx, groundY + 5);
     ctx.stroke();
-    ctx.fillText(i.toString(), x - 4, 148);
+    ctx.fillText(i.toFixed(tickStep < 1 ? 1 : 0), xPx - 8, groundY + 18);
+  }
+
+  const shipMidY = groundY - 35;     // y of ship middle row
+  const shipTopY = shipMidY - 25;
+  const shipHeight = 50;
+
+  // Photon worldline trails (drawn first so they sit behind everything else)
+  if (opts.worldlines) {
+    for (const wl of opts.worldlines) {
+      // Solid orange portion: t in [0, t_absorbed]
+      ctx.strokeStyle = '#ff8800';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, shipMidY);
+      ctx.lineTo(wl.absorbedX, shipMidY);
+      ctx.stroke();
+      // Faded portion after absorption (phantom continuation)
+      if (wl.phantomX !== null && wl.phantomX !== undefined) {
+        ctx.strokeStyle = 'rgba(255,136,0,0.35)';
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(wl.absorbedX, shipMidY);
+        ctx.lineTo(wl.phantomX, shipMidY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
   }
 
   // Ship
-  const shipColor = '#cce5ff';
-  const shipBorder = '#1677ff';
-  ctx.fillStyle = shipColor;
-  ctx.strokeStyle = shipBorder;
+  ctx.fillStyle = '#cce5ff';
+  ctx.strokeStyle = '#1677ff';
   ctx.lineWidth = 2;
-  ctx.fillRect(opts.shipBack, 70, opts.shipFront - opts.shipBack, 50);
-  ctx.strokeRect(opts.shipBack, 70, opts.shipFront - opts.shipBack, 50);
+  ctx.fillRect(opts.shipBack, shipTopY, opts.shipFront - opts.shipBack, shipHeight);
+  ctx.strokeRect(opts.shipBack, shipTopY, opts.shipFront - opts.shipBack, shipHeight);
 
-  // Center observer (blue dot)
+  // Centre observer (blue dot)
   ctx.fillStyle = '#0050b3';
   ctx.beginPath();
-  ctx.arc(opts.shipCenter, 95, 5, 0, 2*Math.PI);
+  ctx.arc(opts.shipCenter, shipMidY, 5, 0, 2*Math.PI);
   ctx.fill();
 
-  // Detectors (red rectangles at the ends)
+  // Detectors at ship ends
   ctx.fillStyle = opts.backHit ? '#cc0000' : '#999';
-  ctx.fillRect(opts.shipBack - 4, 82, 8, 26);
+  ctx.fillRect(opts.shipBack - 4, shipMidY - 13, 8, 26);
   ctx.fillStyle = opts.frontHit ? '#cc0000' : '#999';
-  ctx.fillRect(opts.shipFront - 4, 82, 8, 26);
+  ctx.fillRect(opts.shipFront - 4, shipMidY - 13, 8, 26);
 
-  // Photons (orange dots)
-  ctx.fillStyle = '#ff8800';
+  // Photons — solid orange dot if still en route, faded gray "phantom" if past absorption
   for (const photon of opts.photons) {
-    if (photon.x < 0 || photon.x > W) continue;
-    ctx.beginPath();
-    ctx.arc(photon.x, 95, 4.5, 0, 2*Math.PI);
-    ctx.fill();
+    if (photon.x < -10 || photon.x > W + 10) continue;
+    if (photon.absorbed) {
+      // Phantom: shows where the photon WOULD be if not absorbed (still at ±ct)
+      ctx.strokeStyle = '#666';
+      ctx.fillStyle = 'rgba(255,200,150,0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath();
+      ctx.arc(photon.x, shipMidY, 5, 0, 2*Math.PI);
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      ctx.fillStyle = '#ff8800';
+      ctx.beginPath();
+      ctx.arc(photon.x, shipMidY, 5, 0, 2*Math.PI);
+      ctx.fill();
+    }
   }
 }
 
@@ -211,10 +260,17 @@ function drawShipFrame() {
 function drawGroundFrame() {
   const t = progress * tGroundFinal();
   const W = canvasGround.width;
-  const cx = W / 4;            // origin closer to left so we can watch ship move right
-  const sc = 130;
   const tBack  = tGroundBack();
   const tFront = tGroundFinal();
+
+  // Centred origin + dynamic scale: at every velocity, the canvas displays exactly the
+  // ±c·t_front range with a uniform pixel margin on each side. So both photon trajectories
+  // (including the back photon's "phantom" continuation after absorption) stay visible
+  // for the entire animation, and c-invariance is visually obvious throughout.
+  const cx = W / 2;
+  const halfRange = c * tFront;       // largest |x| we ever need to display
+  const margin = 50;                  // pixels of empty space on each edge
+  const sc = (W/2 - margin) / halfRange;
 
   // Ship in ground frame: moves right at v, length contracted by 1/γ
   const Lg = L / gamma(v);
@@ -222,23 +278,38 @@ function drawGroundFrame() {
   const shipBack  = shipCenterX - Lg * sc;
   const shipFront = shipCenterX + Lg * sc;
 
-  // Photons: emitted from ground origin (cx) at t=0, travel at c
-  // Hide each photon once it has been absorbed by its detector
+  // Photons: emitted from ground origin at t=0, position is ±c·t at every t.
+  // After absorption we continue to render the photon as a faded "phantom" so the user
+  // can still see the speed-of-light reference. The absorbed flag selects the visual style.
   const photons = [];
+  let worldlines = [];
   if (progress > 0 && t > 0) {
     const xForward  = cx + c*t * sc;
     const xBackward = cx - c*t * sc;
-    if (t <= tFront + 1e-6) photons.push({ x: xForward });
-    if (t <= tBack + 1e-6)  photons.push({ x: xBackward });
+    photons.push({ x: xForward,  absorbed: t > tFront });
+    photons.push({ x: xBackward, absorbed: t > tBack  });
+
+    // Worldline trails — solid up to absorption, dashed phantom thereafter
+    worldlines.push({
+      absorbedX: cx + Math.min(t, tFront) * c * sc,
+      phantomX:  t > tFront ? xForward : null,
+    });
+    worldlines.push({
+      absorbedX: cx - Math.min(t, tBack) * c * sc,
+      phantomX:  t > tBack ? xBackward : null,
+    });
   }
 
-  let status = `t = ${t.toFixed(3)} (units L/c), v = ${v.toFixed(2)}c, γ = ${gamma(v).toFixed(3)}, contracted half-length = ${Lg.toFixed(3)}`;
+  let status = `t = ${t.toFixed(3)} L/c   v = ${v.toFixed(2)}c   γ = ${gamma(v).toFixed(3)}   ship contracted L/γ = ${Lg.toFixed(3)}`;
   let status2 = '';
-  if (t >= tBack && t < tFront) status2 = `Back detector fired at t = ${tBack.toFixed(3)}. Waiting for front...`;
+  if (t >= tBack && t < tFront) status2 = `Back detector fired at t = ${tBack.toFixed(3)}. Front photon still en route.`;
   if (t >= tFront) {
     const dt = tFront - tBack;
     status2 = `Both detectors fired. Δt = ${dt.toFixed(3)} L/c — back detector fires FIRST.`;
   }
+  // Live verification of c-invariance: photon positions are always ±ct
+  const ctVal = (c*t).toFixed(3);
+  const status3 = `c-invariance check: forward photon at +${ctVal} L,  back photon at −${ctVal} L  (both moved exactly c·t = ${ctVal} L)`;
 
   drawScene(ctxGround, "Ground frame S — ship moves to the right at v", {
     cx, scale: sc,
@@ -246,23 +317,11 @@ function drawGroundFrame() {
     backHit: t >= tBack,
     frontHit: t >= tFront,
     photons,
+    worldlines,
     statusLine: status,
     statusLine2: status2,
+    statusLine3: status3,
   });
-
-  // Light cone hint: draw light worldlines as dashed grey
-  ctxGround.strokeStyle = 'rgba(255,136,0,0.25)';
-  ctxGround.setLineDash([4, 3]);
-  ctxGround.lineWidth = 1;
-  ctxGround.beginPath();
-  ctxGround.moveTo(cx, 95);
-  ctxGround.lineTo(cx + tFront * c * sc, 95);
-  ctxGround.stroke();
-  ctxGround.beginPath();
-  ctxGround.moveTo(cx, 95);
-  ctxGround.lineTo(cx - tFront * c * sc, 95);
-  ctxGround.stroke();
-  ctxGround.setLineDash([]);
 }
 
 function draw() {
